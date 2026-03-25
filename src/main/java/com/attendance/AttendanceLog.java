@@ -2,6 +2,7 @@ package com.attendance;
 
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 
 /**
  * Represents an employee attendance log entry
@@ -9,16 +10,18 @@ import java.time.format.DateTimeFormatter;
 public class AttendanceLog {
     private String employeeId;
     private String action;
-    private String time;
+    private LocalTime time;
 
-    // Constructor
-    public AttendanceLog(String employeeId, String action, String time) {
+    // Formatter handles both single-digit (9:05 AM) and double-digit (10:05 AM) hours
+    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH);
+
+    public AttendanceLog(String employeeId, String action, String timeStr) {
         this.employeeId = employeeId;
         this.action = action;
-        this.time = time;
+        // Parse string to LocalTime immediately upon creation
+        this.time = LocalTime.parse(timeStr.toUpperCase(), FORMATTER);
     }
 
-    // Getters
     public String getEmployeeId() {
         return employeeId;
     }
@@ -27,50 +30,21 @@ public class AttendanceLog {
         return action;
     }
 
-    public String getTime() {
+    public LocalTime getTime() {
         return time;
     }
 
-    // Convert time string to LocalTime for comparison
-    public LocalTime getTimeAsLocalTime() {
-        try {
-            // Parse time manually to handle AM/PM format
-            String[] parts = time.split(" ");
-            String timePart = parts[0];
-            String amPm = parts[1];
-
-            String[] hourMinute = timePart.split(":");
-            int hour = Integer.parseInt(hourMinute[0]);
-            int minute = Integer.parseInt(hourMinute[1]);
-
-            // Convert to 24-hour format
-            if (amPm.equalsIgnoreCase("PM") && hour != 12) {
-                hour += 12;
-            } else if (amPm.equalsIgnoreCase("AM") && hour == 12) {
-                hour = 0;
-            }
-
-            return LocalTime.of(hour, minute);
-        } catch (Exception e) {
-            System.err.println("Error parsing time: " + time + " - " + e.getMessage());
-            return null;
-        }
+    // Convert back to string for the GUI table and file saving
+    public String getTimeAsString() {
+        return time.format(FORMATTER).toUpperCase();
     }
 
-    // Check if this log represents a login after 9:00 AM
     public boolean isLoginAfter9AM() {
-        if (!action.equals("LOGIN")) {
-            return false;
-        }
-
-        LocalTime logTime = getTimeAsLocalTime();
-        LocalTime nineAM = LocalTime.of(9, 0);
-
-        return logTime != null && logTime.isAfter(nineAM);
+        return "LOGIN".equals(action) && time.isAfter(LocalTime.of(9, 0));
     }
 
     @Override
     public String toString() {
-        return String.format("%s | %s | %s", employeeId, action, time);
+        return String.format("%s | %s | %s", employeeId, action, getTimeAsString());
     }
 }
