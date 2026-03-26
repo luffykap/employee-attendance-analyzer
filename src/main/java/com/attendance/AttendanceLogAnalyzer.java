@@ -91,6 +91,60 @@ public class AttendanceLogAnalyzer {
         attendanceMap.clear();
     }
 
+    /**
+     * NEW: Filter logs by specific employee ID
+     * Returns all attendance records for a given employee
+     * Efficient O(log n) lookup using TreeMap
+     */
+    public List<AttendanceLog> getLogsByEmployeeId(String employeeId) {
+        List<AttendanceLog> logs = attendanceMap.get(employeeId);
+        if (logs == null) {
+            return Collections.emptyList();
+        }
+        // Return a sorted copy (by time)
+        List<AttendanceLog> sortedLogs = new ArrayList<>(logs);
+        sortedLogs.sort(Comparator.comparing(AttendanceLog::getTime));
+        return sortedLogs;
+    }
+
+    /**
+     * NEW: Get total working hours for a specific employee
+     * Returns a formatted string with hours and minutes
+     */
+    public String getTotalDurationForEmployee(String employeeId) {
+        List<AttendanceLog> logs = attendanceMap.get(employeeId);
+        if (logs == null || logs.isEmpty()) {
+            return "No data available";
+        }
+
+        long totalMinutes = 0;
+        AttendanceLog lastLogin = null;
+
+        // Sort logs chronologically
+        List<AttendanceLog> sortedLogs = new ArrayList<>(logs);
+        sortedLogs.sort(Comparator.comparing(AttendanceLog::getTime));
+
+        for (AttendanceLog log : sortedLogs) {
+            if ("LOGIN".equals(log.getAction())) {
+                lastLogin = log;
+            } else if ("LOGOUT".equals(log.getAction()) && lastLogin != null) {
+                totalMinutes += Duration.between(lastLogin.getTime(), log.getTime()).toMinutes();
+                lastLogin = null;
+            }
+        }
+
+        long hours = totalMinutes / 60;
+        long minutes = totalMinutes % 60;
+        return String.format("%d hours, %d minutes", hours, minutes);
+    }
+
+    /**
+     * NEW: Check if employee exists in the system
+     */
+    public boolean employeeExists(String employeeId) {
+        return attendanceMap.containsKey(employeeId);
+    }
+
     // --- FILE I/O OPERATIONS ---
 
     public void saveToFile(String filename, String format) throws Exception {

@@ -180,34 +180,34 @@ public class AttendanceGUI extends JFrame {
         JButton lateLoginBtn = createStyledButton("Find Late Logins (>9AM)", PRIMARY_COLOR);
         JButton durationBtn = createStyledButton("Calculate Durations", SUCCESS_COLOR);
 
+        JButton searchEmployeeBtn = createStyledButton("Search Employee", new Color(52, 152, 219));
         JButton statsBtn = createStyledButton("Show Statistics", PRIMARY_COLOR);
         JButton clearBtn = createStyledButton("Clear All", PRIMARY_COLOR);
-        JButton exitBtn = createStyledButton("Exit", PRIMARY_COLOR);
 
         JButton loadBtn = createStyledButton("Load from File", PRIMARY_COLOR);
         JButton saveBtn = createStyledButton("Save to File", PRIMARY_COLOR);
-        JButton saveAsBtn = createStyledButton("Save As...", PRIMARY_COLOR);
+        JButton exitBtn = createStyledButton("Exit", PRIMARY_COLOR);
 
         displayAllBtn.addActionListener(e -> displayAllLogs());
         lateLoginBtn.addActionListener(e -> findLateLogins());
         durationBtn.addActionListener(e -> calculateDurations());
+        searchEmployeeBtn.addActionListener(e -> searchEmployee());
         statsBtn.addActionListener(e -> showStatistics());
         clearBtn.addActionListener(e -> clearAllLogs());
         exitBtn.addActionListener(e -> exitApplication());
-        
+
         loadBtn.addActionListener(e -> loadFromFile());
         saveBtn.addActionListener(e -> saveToFile(false));
-        saveAsBtn.addActionListener(e -> saveToFile(true));
 
         buttonPanel.add(displayAllBtn);
         buttonPanel.add(lateLoginBtn);
         buttonPanel.add(durationBtn);
+        buttonPanel.add(searchEmployeeBtn);
         buttonPanel.add(statsBtn);
         buttonPanel.add(clearBtn);
-        buttonPanel.add(exitBtn);
         buttonPanel.add(loadBtn);
         buttonPanel.add(saveBtn);
-        buttonPanel.add(saveAsBtn);
+        buttonPanel.add(exitBtn);
 
         statusLabel = new JLabel("Ready", SwingConstants.CENTER);
         statusLabel.setFont(new Font("Arial", Font.ITALIC, 11));
@@ -364,6 +364,96 @@ public class AttendanceGUI extends JFrame {
             refreshTable();
             outputArea.setText("");
             updateStatus("All logs cleared", ERROR_COLOR);
+        }
+    }
+
+    /**
+     * NEW: Search and display all records for a specific employee
+     * Shows attendance logs and total working hours
+     */
+    private void searchEmployee() {
+        try {
+            // Get employee ID from user
+            String empId = JOptionPane.showInputDialog(
+                this,
+                "Enter Employee ID (e.g., EMP101):",
+                "Search Employee",
+                JOptionPane.QUESTION_MESSAGE
+            );
+
+            // Handle cancel or empty input
+            if (empId == null || empId.trim().isEmpty()) {
+                return;
+            }
+
+            empId = empId.trim().toUpperCase();
+
+            // Validate format
+            if (!empId.matches("EMP\\d{3}")) {
+                showError("Invalid Format", "Employee ID must be in format EMPXXX (e.g., EMP101)");
+                return;
+            }
+
+            // Check if employee exists
+            if (!analyzer.employeeExists(empId)) {
+                outputArea.setText("=== SEARCH RESULTS ===\n\n");
+                outputArea.append("❌ No records found for Employee ID: " + empId + "\n\n");
+                outputArea.append("This employee does not exist in the system.\n");
+                outputArea.append("Please verify the Employee ID and try again.\n");
+                updateStatus("Employee not found: " + empId, ERROR_COLOR);
+                return;
+            }
+
+            // Get employee's logs
+            List<AttendanceLog> employeeLogs = analyzer.getLogsByEmployeeId(empId);
+
+            // Display results
+            outputArea.setText("=== EMPLOYEE ATTENDANCE RECORDS ===\n");
+            outputArea.append("Employee ID: " + empId + "\n");
+            outputArea.append("Total Records: " + employeeLogs.size() + "\n");
+            outputArea.append("=" .repeat(50) + "\n\n");
+
+            if (employeeLogs.isEmpty()) {
+                outputArea.append("No attendance records found.\n");
+            } else {
+                // Display all logs chronologically
+                outputArea.append("Attendance Activity (Chronological Order):\n");
+                outputArea.append("-".repeat(50) + "\n");
+
+                for (AttendanceLog log : employeeLogs) {
+                    String icon = "LOGIN".equals(log.getAction()) ? "→ IN " : "← OUT";
+                    outputArea.append(String.format("%s  %s | %s\n",
+                        icon, log.getAction(), log.getTimeAsString()));
+                }
+
+                // Calculate and display total working hours
+                outputArea.append("\n" + "=".repeat(50) + "\n");
+                String totalTime = analyzer.getTotalDurationForEmployee(empId);
+                outputArea.append("Total Working Time: " + totalTime + "\n");
+
+                // Count logins and logouts
+                long logins = employeeLogs.stream()
+                    .filter(log -> "LOGIN".equals(log.getAction()))
+                    .count();
+                long logouts = employeeLogs.stream()
+                    .filter(log -> "LOGOUT".equals(log.getAction()))
+                    .count();
+
+                outputArea.append("\nSession Summary:\n");
+                outputArea.append("  • Total Logins: " + logins + "\n");
+                outputArea.append("  • Total Logouts: " + logouts + "\n");
+
+                if (logins > logouts) {
+                    outputArea.append("  ⚠ Currently logged in (incomplete session)\n");
+                } else if (logins == logouts) {
+                    outputArea.append("  ✓ All sessions completed\n");
+                }
+            }
+
+            updateStatus("Displaying records for " + empId + " (" + employeeLogs.size() + " records)", SUCCESS_COLOR);
+
+        } catch (Exception e) {
+            showError("Search Error", "Error searching employee: " + e.getMessage());
         }
     }
     
