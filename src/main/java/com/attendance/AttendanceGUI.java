@@ -252,6 +252,47 @@ public class AttendanceGUI extends JFrame {
             if (empId.isEmpty()) throw new IllegalArgumentException("Employee ID is required!");
             if (!empId.matches("EMP\\d{3}")) throw new IllegalArgumentException("Format must be EMPXXX");
 
+            // VALIDATION: Check employee's last action to enforce login/logout rules
+            String lastAction = null;
+            List<AttendanceLog> allLogs = analyzer.getAllLogs();
+
+            // Find the last action for this employee
+            for (int i = allLogs.size() - 1; i >= 0; i--) {
+                if (allLogs.get(i).getEmployeeId().equals(empId)) {
+                    lastAction = allLogs.get(i).getAction();
+                    break;
+                }
+            }
+
+            // Rule 1: Cannot LOGIN if already logged in
+            if (action.equals("LOGIN") && "LOGIN".equals(lastAction)) {
+                JOptionPane.showMessageDialog(
+                    this,
+                    "Employee " + empId + " is already logged in. Please logout first.",
+                    "Validation Error",
+                    JOptionPane.ERROR_MESSAGE
+                );
+                updateStatus("Cannot login - Employee already logged in", ERROR_COLOR);
+                return; // Stop execution, don't add log
+            }
+
+            // Rule 2: Cannot LOGOUT if not logged in
+            if (action.equals("LOGOUT") && !"LOGIN".equals(lastAction)) {
+                String message = lastAction == null ?
+                    "Employee " + empId + " is not logged in. Cannot logout." :
+                    "Employee " + empId + " is already logged out. Please login first.";
+
+                JOptionPane.showMessageDialog(
+                    this,
+                    message,
+                    "Validation Error",
+                    JOptionPane.ERROR_MESSAGE
+                );
+                updateStatus("Cannot logout - Employee not logged in", ERROR_COLOR);
+                return; // Stop execution, don't add log
+            }
+
+            // Validation passed - create log entry
             String logEntry = String.format("%s | %s | %s", empId, action, time);
             analyzer.parseAndAddLog(logEntry);
 

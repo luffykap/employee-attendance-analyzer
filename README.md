@@ -174,4 +174,3 @@ Created as a Java programming assignment demonstrating GUI development, data str
 
 ---
 
-**⭐ Star this repository if you find it helpful!**
