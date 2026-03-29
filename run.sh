@@ -21,16 +21,22 @@ case "$1" in
         echo ""
         java -cp "$CLASS_DIR" com.attendance.AttendanceLogAnalyzer
         ;;
+    "test")
+        echo "Running Unit Tests..."
+        echo ""
+        java -cp "$CLASS_DIR" com.attendance.AttendanceTests
+        ;;
     "demo")
         echo "Running SubstringDemo..."
         echo ""
         java -cp "$CLASS_DIR" com.attendance.SubstringDemo
         ;;
     *)
-        echo "Usage: $0 {gui|analyzer|demo}"
+        echo "Usage: $0 {gui|analyzer|test|demo}"
         echo ""
         echo "  gui       - Launch the Java Swing GUI interface (RECOMMENDED)"
         echo "  analyzer  - Run the console-based attendance log analyzer"
+        echo "  test      - Run the unit test suite"
         echo "  demo      - Run the substring usage demonstration"
         exit 1
         ;;

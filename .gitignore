@@ -27,8 +27,7 @@ out/
 # Log files
 *.log
 
-# Text files (attendance data - optional, remove if you want to include sample data)
-*.txt
+# Note: *.txt is NOT ignored so sample attendance data can be committed
 
 # Temporary files
 *.tmp

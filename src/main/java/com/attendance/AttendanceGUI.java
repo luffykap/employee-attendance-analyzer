@@ -1,6 +1,7 @@
 package com.attendance;
 
 import java.awt.*;
+import java.io.IOException;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -13,7 +14,7 @@ import javax.swing.table.DefaultTableModel;
 public class AttendanceGUI extends JFrame {
 
     private AttendanceLogAnalyzer analyzer;
-    private JTextField empIdField, actionField, timeField, dateField;
+    private JTextField empIdField, timeField, dateField;
     private JTable logTable;
     private DefaultTableModel tableModel;
     private JTextArea outputArea;
@@ -173,25 +174,28 @@ public class AttendanceGUI extends JFrame {
         JPanel outerPanel = new JPanel(new BorderLayout());
         outerPanel.setPreferredSize(new Dimension(1200, 180));
 
-        JPanel buttonPanel = new JPanel(new GridLayout(3, 3, 15, 10));
+        JPanel buttonPanel = new JPanel(new GridLayout(4, 3, 15, 10));
         buttonPanel.setBorder(BorderFactory.createEmptyBorder(15, 30, 15, 30));
 
         JButton displayAllBtn = createStyledButton("Display All Logs", PRIMARY_COLOR);
         JButton lateLoginBtn = createStyledButton("Find Late Logins (>9AM)", PRIMARY_COLOR);
-        JButton durationBtn = createStyledButton("Calculate Durations", SUCCESS_COLOR);
+        JButton durationBtn = createStyledButton("Calculate Durations", PRIMARY_COLOR);
 
-        JButton searchEmployeeBtn = createStyledButton("Search Employee", new Color(52, 152, 219));
+        JButton searchEmployeeBtn = createStyledButton("Search Employee", PRIMARY_COLOR);
+        JButton sortBtn = createStyledButton("Sort by Employee ID", PRIMARY_COLOR);
         JButton statsBtn = createStyledButton("Show Statistics", PRIMARY_COLOR);
-        JButton clearBtn = createStyledButton("Clear All", PRIMARY_COLOR);
 
+        JButton clearBtn = createStyledButton("Clear All", PRIMARY_COLOR);
         JButton loadBtn = createStyledButton("Load from File", PRIMARY_COLOR);
         JButton saveBtn = createStyledButton("Save to File", PRIMARY_COLOR);
+
         JButton exitBtn = createStyledButton("Exit", PRIMARY_COLOR);
 
         displayAllBtn.addActionListener(e -> displayAllLogs());
         lateLoginBtn.addActionListener(e -> findLateLogins());
         durationBtn.addActionListener(e -> calculateDurations());
         searchEmployeeBtn.addActionListener(e -> searchEmployee());
+        sortBtn.addActionListener(e -> sortByEmployeeId());
         statsBtn.addActionListener(e -> showStatistics());
         clearBtn.addActionListener(e -> clearAllLogs());
         exitBtn.addActionListener(e -> exitApplication());
@@ -203,6 +207,7 @@ public class AttendanceGUI extends JFrame {
         buttonPanel.add(lateLoginBtn);
         buttonPanel.add(durationBtn);
         buttonPanel.add(searchEmployeeBtn);
+        buttonPanel.add(sortBtn);
         buttonPanel.add(statsBtn);
         buttonPanel.add(clearBtn);
         buttonPanel.add(loadBtn);
@@ -238,7 +243,7 @@ public class AttendanceGUI extends JFrame {
             dateField.setText(istDateTime.format(DateTimeFormatter.ofPattern("dd-MMM-yyyy", Locale.ENGLISH)));
             timeField.setText(istDateTime.format(DateTimeFormatter.ofPattern("hh:mm a", Locale.ENGLISH)).toUpperCase());
             updateStatus("Refreshed current date and time", PRIMARY_COLOR);
-        } catch (Exception e) {
+        } catch (java.time.DateTimeException e) {
             showError("Date Error", e.getMessage());
         }
     }
@@ -249,57 +254,17 @@ public class AttendanceGUI extends JFrame {
             String date = dateField.getText().trim();
             String time = timeField.getText().trim();
 
-            if (empId.isEmpty()) throw new IllegalArgumentException("Employee ID is required!");
-            if (!empId.matches("EMP\\d{3}")) throw new IllegalArgumentException("Format must be EMPXXX");
-
-            // VALIDATION: Check employee's last action to enforce login/logout rules
-            String lastAction = null;
-            List<AttendanceLog> allLogs = analyzer.getAllLogs();
-
-            // Find the last action for this employee
-            for (int i = allLogs.size() - 1; i >= 0; i--) {
-                if (allLogs.get(i).getEmployeeId().equals(empId)) {
-                    lastAction = allLogs.get(i).getAction();
-                    break;
-                }
-            }
-
-            // Rule 1: Cannot LOGIN if already logged in
-            if (action.equals("LOGIN") && "LOGIN".equals(lastAction)) {
-                JOptionPane.showMessageDialog(
-                    this,
-                    "Employee " + empId + " is already logged in. Please logout first.",
-                    "Validation Error",
-                    JOptionPane.ERROR_MESSAGE
-                );
-                updateStatus("Cannot login - Employee already logged in", ERROR_COLOR);
-                return; // Stop execution, don't add log
-            }
-
-            // Rule 2: Cannot LOGOUT if not logged in
-            if (action.equals("LOGOUT") && !"LOGIN".equals(lastAction)) {
-                String message = lastAction == null ?
-                    "Employee " + empId + " is not logged in. Cannot logout." :
-                    "Employee " + empId + " is already logged out. Please login first.";
-
-                JOptionPane.showMessageDialog(
-                    this,
-                    message,
-                    "Validation Error",
-                    JOptionPane.ERROR_MESSAGE
-                );
-                updateStatus("Cannot logout - Employee not logged in", ERROR_COLOR);
-                return; // Stop execution, don't add log
-            }
-
-            // Validation passed - create log entry
-            String logEntry = String.format("%s | %s | %s", empId, action, time);
-            analyzer.parseAndAddLog(logEntry);
+            // All validation is handled by the analyzer
+            analyzer.validateAndAddLog(empId, action, date, time);
 
             refreshTable();
             empIdField.setText("");
             updateStatus("Log added successfully!", SUCCESS_COLOR);
 
+        } catch (IllegalArgumentException e) {
+            JOptionPane.showMessageDialog(
+                this, e.getMessage(), "Validation Error", JOptionPane.ERROR_MESSAGE);
+            updateStatus("Error: " + e.getMessage(), ERROR_COLOR);
         } catch (Exception e) {
             showError("Input Error", e.getMessage());
         }
@@ -307,9 +272,8 @@ public class AttendanceGUI extends JFrame {
 
     private void refreshTable() {
         tableModel.setRowCount(0);
-        String currentDate = dateField.getText();
         for (AttendanceLog log : analyzer.getAllLogs()) {
-            tableModel.addRow(new Object[]{log.getEmployeeId(), log.getAction(), currentDate, log.getTimeAsString()});
+            tableModel.addRow(new Object[]{log.getEmployeeId(), log.getAction(), log.getDate(), log.getTimeAsString()});
         }
     }
 
@@ -333,6 +297,14 @@ public class AttendanceGUI extends JFrame {
         updateStatus("Displayed all logs", PRIMARY_COLOR);
     }
 
+    private void sortByEmployeeId() {
+        // TreeMap already keeps logs sorted by Employee ID
+        refreshTable();
+        outputArea.setText("=== LOGS SORTED BY EMPLOYEE ID ===\n");
+        analyzer.getAllLogs().forEach(log -> outputArea.append(log.toString() + "\n"));
+        updateStatus("Logs sorted by Employee ID (via TreeMap)", new Color(142, 68, 173));
+    }
+
     private void findLateLogins() {
         outputArea.setText("=== LATE LOGINS (>9AM) ===\n");
         List<AttendanceLog> lateLogs = analyzer.getLogsAfter9AM();
@@ -354,6 +326,13 @@ public class AttendanceGUI extends JFrame {
         
         outputArea.append("Logins: " + logins + "\n");
         outputArea.append("Logouts: " + logouts + "\n");
+
+        long uniqueEmployees = allLogs.stream()
+            .map(l -> l.getEmployeeId())
+            .distinct()
+            .count();
+        outputArea.append("Unique Employees: " + uniqueEmployees + "\n");
+
         updateStatus("Stats generated", PRIMARY_COLOR);
     }
 
@@ -422,8 +401,8 @@ public class AttendanceGUI extends JFrame {
 
                 for (AttendanceLog log : employeeLogs) {
                     String icon = "LOGIN".equals(log.getAction()) ? "→ IN " : "← OUT";
-                    outputArea.append(String.format("%s  %s | %s\n",
-                        icon, log.getAction(), log.getTimeAsString()));
+                    outputArea.append(String.format("%s  %s | %s | %s\n",
+                        icon, log.getAction(), log.getDate(), log.getTimeAsString()));
                 }
 
                 // Calculate and display total working hours
@@ -468,7 +447,7 @@ public class AttendanceGUI extends JFrame {
                 refreshTable();
                 updateStatus("Loaded " + count + " logs", SUCCESS_COLOR);
             }
-        } catch (Exception e) {
+        } catch (IOException e) {
             showError("Load Error", e.getMessage());
         }
     }
@@ -486,7 +465,7 @@ public class AttendanceGUI extends JFrame {
                 analyzer.saveToFile(fileChooser.getSelectedFile().getAbsolutePath(), format);
                 updateStatus("Saved successfully", SUCCESS_COLOR);
             }
-        } catch (Exception e) {
+        } catch (IOException e) {
             showError("Save Error", e.getMessage());
         }
     }
@@ -498,11 +477,16 @@ public class AttendanceGUI extends JFrame {
     }
 
     private void loadSampleData() {
+        String today = dateField.getText();
         String[] sampleLogs = {
-                "EMP101 | LOGIN | 09:05 AM", "EMP102 | LOGIN | 08:45 AM",
-                "EMP103 | LOGIN | 09:15 AM", "EMP101 | LOGOUT | 05:30 PM",
-                "EMP105 | LOGIN | 08:30 AM", "EMP104 | LOGIN | 09:30 AM",
-                "EMP102 | LOGOUT | 06:00 PM", "EMP103 | LOGOUT | 05:45 PM"
+                "EMP101 | LOGIN | " + today + " | 09:05 AM",
+                "EMP102 | LOGIN | " + today + " | 08:45 AM",
+                "EMP103 | LOGIN | " + today + " | 09:15 AM",
+                "EMP101 | LOGOUT | " + today + " | 05:30 PM",
+                "EMP105 | LOGIN | " + today + " | 08:30 AM",
+                "EMP104 | LOGIN | " + today + " | 09:30 AM",
+                "EMP102 | LOGOUT | " + today + " | 06:00 PM",
+                "EMP103 | LOGOUT | " + today + " | 05:45 PM"
         };
         for (String log : sampleLogs) {
             analyzer.parseAndAddLog(log);

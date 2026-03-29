@@ -10,14 +10,16 @@ import java.util.Locale;
 public class AttendanceLog {
     private String employeeId;
     private String action;
+    private String date;
     private LocalTime time;
 
     // Formatter handles both single-digit (9:05 AM) and double-digit (10:05 AM) hours
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH);
 
-    public AttendanceLog(String employeeId, String action, String timeStr) {
+    public AttendanceLog(String employeeId, String action, String date, String timeStr) {
         this.employeeId = employeeId;
         this.action = action;
+        this.date = date;
         // Parse string to LocalTime immediately upon creation
         this.time = LocalTime.parse(timeStr.toUpperCase(), FORMATTER);
     }
@@ -28,6 +30,10 @@ public class AttendanceLog {
 
     public String getAction() {
         return action;
+    }
+
+    public String getDate() {
+        return date;
     }
 
     public LocalTime getTime() {
@@ -45,6 +51,6 @@ public class AttendanceLog {
 
     @Override
     public String toString() {
-        return String.format("%s | %s | %s", employeeId, action, getTimeAsString());
+        return String.format("%s | %s | %s | %s", employeeId, action, date, getTimeAsString());
     }
 }
