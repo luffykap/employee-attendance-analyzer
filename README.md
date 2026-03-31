@@ -43,7 +43,7 @@ employee-attendance-analyzer/
 │   ├── AttendanceGUI.java           # Main GUI application
 │   ├── AttendanceLog.java           # Data model class
 │   ├── AttendanceLogAnalyzer.java   # Business logic & file operations
-│   └── SubstringDemo.java           # Utility demo
+
 ├── .gitignore                       # Git ignore rules
 ├── build.sh                         # Build script
 ├── run.sh                          # Run script

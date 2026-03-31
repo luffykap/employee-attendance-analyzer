@@ -19,8 +19,8 @@ if [ $? -eq 0 ]; then
     echo "✅ Compilation successful!"
     echo ""
     echo "Available commands:"
-    echo "  ./run.sh analyzer  - Run the main attendance analyzer"
-    echo "  ./run.sh demo      - Run the substring demonstration"
+    echo "  ./run.sh gui       - Launch the Java Swing GUI interface (RECOMMENDED)"
+    echo "  ./run.sh analyzer  - Run the console-based attendance log analyzer"
     echo ""
 else
     echo "❌ Compilation failed!"

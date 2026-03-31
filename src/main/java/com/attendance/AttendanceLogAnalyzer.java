@@ -1,8 +1,6 @@
 package com.attendance;
 
-import java.io.BufferedReader;
 import java.io.BufferedWriter;
-import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.time.Duration;
@@ -15,6 +13,9 @@ import java.util.stream.Collectors;
 public class AttendanceLogAnalyzer {
 
     private static final Logger LOGGER = Logger.getLogger(AttendanceLogAnalyzer.class.getName());
+
+    // Store valid employees to detect absences
+    public static final List<String> ALL_EMPLOYEES = Arrays.asList("EMP101", "EMP102", "EMP103", "EMP104", "EMP105");
 
     private TreeMap<String, List<AttendanceLog>> attendanceMap;
 
@@ -117,19 +118,25 @@ public class AttendanceLogAnalyzer {
     }
 
     /**
-     * NEW: Calculate total session durations using LocalTime math
+     * Calculate total duration of work for each employee, filtered by date.
+     * Overtime (>8h) and Shortfalls (<8h) are visibly flagged.
      */
-    public Map<String, String> calculateTotalDurations() {
+    public Map<String, String> calculateTotalDurations(String targetDate) {
         Map<String, String> durationReport = new LinkedHashMap<>();
 
         attendanceMap.forEach((empId, logs) -> {
             long totalMinutes = 0;
             AttendanceLog lastLogin = null;
 
-            // Ensure logs are sorted chronologically before calculating
-            logs.sort(Comparator.comparing(AttendanceLog::getTime));
+            // Filter by date and sort
+            List<AttendanceLog> filteredLogs = logs.stream()
+                .filter(log -> targetDate == null || "All Dates".equals(targetDate) || log.getDate().equals(targetDate))
+                .sorted(Comparator.comparing(AttendanceLog::getTime))
+                .collect(Collectors.toList());
 
-            for (AttendanceLog log : logs) {
+            if (filteredLogs.isEmpty()) return;
+
+            for (AttendanceLog log : filteredLogs) {
                 if ("LOGIN".equals(log.getAction())) {
                     lastLogin = log;
                 } else if ("LOGOUT".equals(log.getAction()) && lastLogin != null) {
@@ -140,10 +147,71 @@ public class AttendanceLogAnalyzer {
 
             long hours = totalMinutes / 60;
             long minutes = totalMinutes % 60;
-            durationReport.put(empId, String.format("%d hours, %d minutes", hours, minutes));
+            String resultStr = String.format("%d hours, %d minutes", hours, minutes);
+
+            // Calculate overtime/undertime (assume 8 hours = 480 mins)
+            long diff = totalMinutes - 480;
+            if (diff > 0) {
+                resultStr += "  [OVERTIME +" + diff + " mins]";
+            } else if (diff < 0) {
+                resultStr += "  [SHORTFALL " + diff + " mins]";
+            }
+
+            durationReport.put(empId, resultStr);
         });
 
         return durationReport;
+    }
+
+    public Map<String, String> calculateTotalDurations() {
+        return calculateTotalDurations("All Dates");
+    }
+
+    /**
+     * Extract a list of distinct dates present in the logs.
+     */
+    public List<String> getUniqueDates() {
+        return getAllLogs().stream()
+            .map(AttendanceLog::getDate)
+            .filter(d -> !"N/A".equals(d))
+            .distinct()
+            .sorted()
+            .collect(Collectors.toList());
+    }
+
+    /**
+     * Find employees who did not log in on a specific date.
+     */
+    public List<String> getAbsentEmployees(String targetDate) {
+        if (targetDate == null || "All Dates".equals(targetDate)) {
+            return new ArrayList<>();
+        }
+        
+        Set<String> presentIds = getFilteredLogs(targetDate).stream()
+                .map(AttendanceLog::getEmployeeId)
+                .collect(Collectors.toSet());
+                
+        return ALL_EMPLOYEES.stream()
+                .filter(emp -> !presentIds.contains(emp))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Retrieve logs optionally filtered by date.
+     */
+    public List<AttendanceLog> getFilteredLogs(String targetDate) {
+        if (targetDate == null || "All Dates".equals(targetDate)) {
+            return getAllLogs();
+        }
+        return getAllLogs().stream()
+            .filter(log -> log.getDate().equals(targetDate))
+            .collect(Collectors.toList());
+    }
+
+    public List<AttendanceLog> getLogsAfter9AM(String targetDate) {
+        return getFilteredLogs(targetDate).stream()
+            .filter(AttendanceLog::isLoginAfter9AM)
+            .collect(Collectors.toList());
     }
 
     public List<AttendanceLog> getAllLogs() {
@@ -154,14 +222,7 @@ public class AttendanceLogAnalyzer {
     }
 
     public List<AttendanceLog> getLogsAfter9AM() {
-        return getAllLogs().stream()
-                .filter(AttendanceLog::isLoginAfter9AM)
-                .collect(Collectors.toList());
-    }
-
-
-    public void clearAllLogs() {
-        attendanceMap.clear();
+        return getLogsAfter9AM("All Dates");
     }
 
     /**
@@ -233,8 +294,8 @@ public class AttendanceLogAnalyzer {
 
     // --- FILE I/O OPERATIONS ---
 
-    public void saveToFile(String filename, String format) throws IOException {
-        List<AttendanceLog> flatLogs = getAllLogs();
+    public void saveToFile(String filename, String format, List<AttendanceLog> logsToSave) throws IOException {
+        List<AttendanceLog> flatLogs = logsToSave;
         try (BufferedWriter bw = new BufferedWriter(new FileWriter(filename))) {
             if ("JSON".equalsIgnoreCase(format)) {
                 bw.write("[\n");
@@ -263,6 +324,10 @@ public class AttendanceLogAnalyzer {
         }
     }
 
+    public void saveToFile(String filename, String format) throws IOException {
+        saveToFile(filename, format, getAllLogs());
+    }
+
     /**
      * Escapes special characters for safe JSON string output.
      */
@@ -277,120 +342,30 @@ public class AttendanceLogAnalyzer {
     }
 
 
-    public int loadFromFile(String filename) throws IOException {
-        int count = 0;
-        try (BufferedReader br = new BufferedReader(new FileReader(filename))) {
-            // Peek at the first non-empty line to detect format
-            br.mark(8192);
-            String firstLine = "";
-            String peek;
-            while ((peek = br.readLine()) != null) {
-                peek = peek.trim();
-                if (!peek.isEmpty()) { firstLine = peek; break; }
-            }
-            br.reset();
-
-            if (firstLine.startsWith("[") || firstLine.startsWith("{")) {
-                // --- JSON FORMAT ---
-                // Read the entire file content and parse JSON objects manually
-                StringBuilder sb = new StringBuilder();
-                String line;
-                while ((line = br.readLine()) != null) {
-                    sb.append(line).append("\n");
-                }
-                String content = sb.toString();
-
-                // Extract each JSON object's fields using simple string parsing
-                String employeeId = null, action = null, date = null, time = null;
-                for (String jsonLine : content.split("\n")) {
-                    jsonLine = jsonLine.trim();
-
-                    if (jsonLine.startsWith("\"employeeId\"")) {
-                        employeeId = extractJsonValue(jsonLine);
-                    } else if (jsonLine.startsWith("\"action\"")) {
-                        action = extractJsonValue(jsonLine);
-                    } else if (jsonLine.startsWith("\"date\"")) {
-                        date = extractJsonValue(jsonLine);
-                    } else if (jsonLine.startsWith("\"time\"")) {
-                        time = extractJsonValue(jsonLine);
-                    }
-
-                    // When we hit a closing brace, we have a complete object
-                    if (jsonLine.startsWith("}") && employeeId != null && action != null && time != null) {
-                        String logEntry;
-                        if (date != null) {
-                            logEntry = employeeId + " | " + action + " | " + date + " | " + time;
-                        } else {
-                            logEntry = employeeId + " | " + action + " | " + time;
-                        }
-                        parseAndAddLog(logEntry);
-                        count++;
-                        // Reset for the next object
-                        employeeId = null; action = null; date = null; time = null;
-                    }
-                }
-            } else {
-                // --- TXT or CSV FORMAT ---
-                String line;
-                while ((line = br.readLine()) != null) {
-                    line = line.trim();
-                    if (line.isEmpty() || line.startsWith("Employee ID,")) {
-                        continue;
-                    }
-
-                    if (line.contains(" | ")) {
-                        // TXT format: EMP101 | LOGIN | 29-Mar-2026 | 09:05 AM
-                        parseAndAddLog(line);
-                        count++;
-                    } else if (line.contains(",")) {
-                        // CSV format: EMP101,LOGIN,29-Mar-2026,09:05 AM
-                        String[] parts = line.split(",");
-                        if (parts.length >= 4) {
-                            String logEntry = parts[0].trim() + " | " + parts[1].trim() + " | " + parts[2].trim() + " | " + parts[3].trim();
-                            parseAndAddLog(logEntry);
-                            count++;
-                        } else if (parts.length == 3) {
-                            // Legacy CSV without date
-                            String logEntry = parts[0].trim() + " | " + parts[1].trim() + " | " + parts[2].trim();
-                            parseAndAddLog(logEntry);
-                            count++;
-                        }
-                    }
-                }
-            }
-        }
-        return count;
-    }
-
-    /**
-     * Extracts the string value from a JSON line like:  "key": "value",
-     */
-    private String extractJsonValue(String jsonLine) {
-        // Find the value after the colon: "key": "value" or "key": "value",
-        int colonIndex = jsonLine.indexOf(':');
-        if (colonIndex < 0) return null;
-        String valuePart = jsonLine.substring(colonIndex + 1).trim();
-        // Remove surrounding quotes and trailing comma
-        valuePart = valuePart.replace(",", "").replace("\"", "").trim();
-        return valuePart;
-    }
-
     // --- CONSOLE ENTRY POINT ---
 
     public static void main(String[] args) {
         AttendanceLogAnalyzer analyzer = new AttendanceLogAnalyzer();
         Scanner scanner = new Scanner(System.in);
 
-        // Load sample data
+        // Load static random sample data across multiple dates
+        String d1 = "14-Feb-2026";
+        String d2 = "03-Mar-2026";
+        String d3 = "22-Apr-2026";
+        String d4 = "10-May-2026";
+        String d5 = "01-Jun-2026";
+
         String[] sampleLogs = {
-            "EMP101 | LOGIN | 29-Mar-2026 | 09:05 AM",
-            "EMP102 | LOGIN | 29-Mar-2026 | 08:45 AM",
-            "EMP103 | LOGIN | 29-Mar-2026 | 09:15 AM",
-            "EMP101 | LOGOUT | 29-Mar-2026 | 05:30 PM",
-            "EMP105 | LOGIN | 29-Mar-2026 | 08:30 AM",
-            "EMP104 | LOGIN | 29-Mar-2026 | 09:30 AM",
-            "EMP102 | LOGOUT | 29-Mar-2026 | 06:00 PM",
-            "EMP103 | LOGOUT | 29-Mar-2026 | 05:45 PM"
+            "EMP101 | LOGIN | " + d1 + " | 09:05 AM",
+            "EMP101 | LOGOUT | " + d1 + " | 05:30 PM",
+            "EMP102 | LOGIN | " + d2 + " | 08:45 AM",
+            "EMP102 | LOGOUT | " + d2 + " | 06:00 PM",
+            "EMP103 | LOGIN | " + d3 + " | 09:15 AM",
+            "EMP103 | LOGOUT | " + d3 + " | 05:45 PM",
+            "EMP104 | LOGIN | " + d4 + " | 08:30 AM",
+            "EMP104 | LOGOUT | " + d4 + " | 04:30 PM",
+            "EMP105 | LOGIN | " + d5 + " | 09:30 AM",
+            "EMP105 | LOGOUT | " + d5 + " | 06:15 PM"
         };
         for (String log : sampleLogs) {
             analyzer.parseAndAddLog(log);
