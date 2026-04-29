@@ -1,6 +1,10 @@
 # Stage 1: Build
 FROM eclipse-temurin:11-jdk-alpine as builder
 
+# Cache bust argument to force fresh rebuild
+ARG BUILD_ID=default
+RUN echo "Building with BUILD_ID=${BUILD_ID}"
+
 WORKDIR /app
 
 # Copy source
