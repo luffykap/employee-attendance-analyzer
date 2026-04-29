@@ -21,7 +21,6 @@ RUN cd src/main/java && \
 
 # Copy web content
 COPY src/main/webapp/ target/webapp/
-COPY src/main/resources/webapp/ target/webapp/
 
 # Create WAR file
 RUN cd target/webapp && \
