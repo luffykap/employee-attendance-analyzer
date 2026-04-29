@@ -30,19 +30,19 @@ COPY src/main/webapp/ target/webapp/
 RUN cd target/webapp && \
     mkdir -p WEB-INF/classes && \
     cp -r /app/target/classes/* WEB-INF/classes/ && \
-    cp /app/lib/*.jar WEB-INF/lib/ && \
+    cp /app/lib/sqlite-jdbc-*.jar WEB-INF/lib/ && \
     cd /app/target && \
     jar -cf attendance.war -C webapp .
 
 # Stage 2: Runtime
 FROM eclipse-temurin:11-jre-alpine
 
-# Install Tomcat
+# Install Tomcat 10 (which supports jakarta.servlet)
 RUN apk add --no-cache wget bash && \
-    wget -q https://archive.apache.org/dist/tomcat/tomcat-9/v9.0.88/bin/apache-tomcat-9.0.88.tar.gz && \
-    tar -xzf apache-tomcat-9.0.88.tar.gz && \
-    rm apache-tomcat-9.0.88.tar.gz && \
-    mv apache-tomcat-9.0.88 /tomcat
+    wget -q https://archive.apache.org/dist/tomcat/tomcat-10/v10.1.20/bin/apache-tomcat-10.1.20.tar.gz && \
+    tar -xzf apache-tomcat-10.1.20.tar.gz && \
+    rm apache-tomcat-10.1.20.tar.gz && \
+    mv apache-tomcat-10.1.20 /tomcat
 
 # Remove default webapps
 RUN rm -rf /tomcat/webapps/*
