@@ -26,9 +26,10 @@ RUN cd src/main/java && \
 # Copy web content
 COPY src/main/webapp/ target/webapp/
 
-# Create WAR file
+# Create WAR file - preserving WEB-INF structure
 RUN cd target/webapp && \
-    cp -r ../classes WEB-INF/ && \
+    mkdir -p WEB-INF/classes && \
+    cp -r /app/target/classes/* WEB-INF/classes/ && \
     cp /app/lib/*.jar WEB-INF/lib/ && \
     cd /app/target && \
     jar -cf attendance.war -C webapp .
