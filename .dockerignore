@@ -1,0 +1,11 @@
+target/
+.git/
+.gitignore
+*.md
+.DS_Store
+node_modules/
+apache-tomcat-9.0.88/
+.vscode/
+*.class
+*.jar
+.env
