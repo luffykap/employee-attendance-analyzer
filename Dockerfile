@@ -6,12 +6,11 @@ WORKDIR /app
 # Copy source and build scripts
 COPY src/ src/
 COPY build.sh .
-COPY target/ target/
 
 # Create lib directory
 RUN mkdir -p lib
 
-# Run build (will download dependencies)
+# Run build (will download dependencies and create WAR)
 RUN chmod +x build.sh && ./build.sh
 
 # Stage 2: Runtime
