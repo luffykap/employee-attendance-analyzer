@@ -3,15 +3,32 @@ FROM eclipse-temurin:11-jdk-alpine as builder
 
 WORKDIR /app
 
-# Copy source and build scripts
+# Copy source
 COPY src/ src/
-COPY build.sh .
 
-# Create lib directory
-RUN mkdir -p lib
+# Create directories
+RUN mkdir -p target/classes lib target/webapp/WEB-INF/classes target/webapp/WEB-INF/lib
 
-# Run build (will download dependencies and create WAR)
-RUN chmod +x build.sh && ./build.sh
+# Download dependencies
+RUN cd lib && \
+    wget -q https://github.com/xerial/sqlite-jdbc/releases/download/3.41.2.2/sqlite-jdbc-3.41.2.2.jar && \
+    wget -q https://repo1.maven.org/maven2/jakarta/servlet/jakarta.servlet-api/6.0.0/jakarta.servlet-api-6.0.0.jar
+
+# Compile Java files
+RUN cd src/main/java && \
+    find . -name "*.java" | xargs javac -d /app/target/classes \
+    -cp /app/lib/sqlite-jdbc-3.41.2.2.jar:/app/lib/jakarta.servlet-api-6.0.0.jar
+
+# Copy web content
+COPY src/main/webapp/ target/webapp/
+COPY src/main/resources/webapp/ target/webapp/
+
+# Create WAR file
+RUN cd target/webapp && \
+    cp -r ../classes WEB-INF/ && \
+    cp /app/lib/*.jar WEB-INF/lib/ && \
+    cd /app/target && \
+    jar -cf attendance.war -C webapp .
 
 # Stage 2: Runtime
 FROM eclipse-temurin:11-jre-alpine
@@ -31,9 +48,6 @@ COPY --from=builder /app/target/attendance.war /tomcat/webapps/attendance.war
 
 # Expose port 8080
 EXPOSE 8080
-
-# Set Render port
-ENV PORT=8080
 
 # Start Tomcat
 CMD ["/tomcat/bin/catalina.sh", "run"]
