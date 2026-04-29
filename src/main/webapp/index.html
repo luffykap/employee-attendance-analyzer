@@ -547,9 +547,9 @@ async function apiGet(operation, extraParams){
       }
     });
   }
-  const response=await fetch('api/attendance?'+params.toString());
+  const response=await fetch('/attendance/api/attendance?'+params.toString());
   if(response.status===401){
-    window.location.href='api/attendance?operation=loginPage';
+    window.location.href='/attendance/api/attendance?operation=loginPage';
     throw new Error('Unauthorized');
   }
   return response.json();
@@ -558,13 +558,13 @@ async function apiGet(operation, extraParams){
 async function apiPost(operation, bodyParams){
   const params=new URLSearchParams({operation:operation});
   if(bodyParams){Object.keys(bodyParams).forEach(key=>params.set(key,bodyParams[key]));}
-  const response=await fetch('api/attendance',{
+  const response=await fetch('/attendance/api/attendance',{
     method:'POST',
     headers:{'Content-Type':'application/x-www-form-urlencoded'},
     body:params.toString()
   });
   if(response.status===401){
-    window.location.href='api/attendance?operation=loginPage';
+    window.location.href='/attendance/api/attendance?operation=loginPage';
     throw new Error('Unauthorized');
   }
   return response.json();
