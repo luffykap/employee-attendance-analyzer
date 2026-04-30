@@ -15,13 +15,13 @@ RUN mkdir -p target/classes lib target/webapp/WEB-INF/classes target/webapp/WEB-
 
 # Download dependencies
 RUN cd lib && \
-    wget -q https://github.com/xerial/sqlite-jdbc/releases/download/3.41.2.2/sqlite-jdbc-3.41.2.2.jar && \
+    wget -q https://jdbc.postgresql.org/download/postgresql-42.7.3.jar && \
     wget -q https://repo1.maven.org/maven2/jakarta/servlet/jakarta.servlet-api/6.0.0/jakarta.servlet-api-6.0.0.jar
 
 # Compile Java files
 RUN cd src/main/java && \
     find . -name "*.java" | xargs javac -d /app/target/classes \
-    -cp /app/lib/sqlite-jdbc-3.41.2.2.jar:/app/lib/jakarta.servlet-api-6.0.0.jar
+    -cp /app/lib/postgresql-42.7.3.jar:/app/lib/jakarta.servlet-api-6.0.0.jar
 
 # Copy web content
 COPY src/main/webapp/ target/webapp/
@@ -30,7 +30,7 @@ COPY src/main/webapp/ target/webapp/
 RUN cd target/webapp && \
     mkdir -p WEB-INF/classes && \
     cp -r /app/target/classes/* WEB-INF/classes/ && \
-    cp /app/lib/sqlite-jdbc-*.jar WEB-INF/lib/ && \
+    cp /app/lib/postgresql-*.jar WEB-INF/lib/ && \
     cd /app/target && \
     jar -cf attendance.war -C webapp .
 

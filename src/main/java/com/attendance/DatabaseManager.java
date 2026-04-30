@@ -5,36 +5,66 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.net.URI;
+import java.net.URISyntaxException;
 
 public class DatabaseManager {
 
     private static final Logger LOGGER = Logger.getLogger(DatabaseManager.class.getName());
-    private static final String DATABASE_URL = "jdbc:sqlite:" + System.getProperty("user.home") + "/attendance.db";
     private static final String TABLE_NAME = "attendance_logs";
 
     public DatabaseManager() {
-        // Load SQLite JDBC driver
+        // Load PostgreSQL JDBC driver
         try {
-            Class.forName("org.sqlite.JDBC");
+            Class.forName("org.postgresql.Driver");
         } catch (ClassNotFoundException e) {
-            LOGGER.log(Level.SEVERE, "SQLite JDBC driver not found", e);
+            LOGGER.log(Level.SEVERE, "PostgreSQL JDBC driver not found", e);
         }
         initializeDatabase();
     }
 
+    private Connection getConnection() throws SQLException {
+        String jdbcUrl = System.getenv("JDBC_DATABASE_URL");
+        if (jdbcUrl != null && !jdbcUrl.isEmpty()) {
+            return DriverManager.getConnection(jdbcUrl);
+        }
+
+        String renderDbUrl = System.getenv("DATABASE_URL");
+        if (renderDbUrl != null && !renderDbUrl.isEmpty()) {
+            try {
+                URI dbUri = new URI(renderDbUrl);
+                String username = dbUri.getUserInfo() != null ? dbUri.getUserInfo().split(":")[0] : null;
+                String password = dbUri.getUserInfo() != null && dbUri.getUserInfo().split(":").length > 1 ? dbUri.getUserInfo().split(":")[1] : null;
+                int port = dbUri.getPort() == -1 ? 5432 : dbUri.getPort();
+                String dbUrlJdbc = "jdbc:postgresql://" + dbUri.getHost() + ':' + port + dbUri.getPath();
+                
+                if (username != null && password != null) {
+                    return DriverManager.getConnection(dbUrlJdbc, username, password);
+                } else {
+                    return DriverManager.getConnection(dbUrlJdbc);
+                }
+            } catch (URISyntaxException e) {
+                LOGGER.log(Level.SEVERE, "Error parsing DATABASE_URL", e);
+            }
+        }
+
+        // Fallback for local development
+        return DriverManager.getConnection("jdbc:postgresql://localhost:5432/attendance", "postgres", "postgres");
+    }
+
     /**
-     * Initialize the SQLite database and create table if it doesn't exist.
+     * Initialize the PostgreSQL database and create table if it doesn't exist.
      */
     private void initializeDatabase() {
-        try (Connection conn = DriverManager.getConnection(DATABASE_URL);
+        try (Connection conn = getConnection();
              Statement stmt = conn.createStatement()) {
 
             String createTableSQL = "CREATE TABLE IF NOT EXISTS " + TABLE_NAME + " ("
-                    + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-                    + "employee_id TEXT NOT NULL, "
-                    + "action TEXT NOT NULL, "
-                    + "date TEXT NOT NULL, "
-                    + "time TEXT NOT NULL, "
+                    + "id SERIAL PRIMARY KEY, "
+                    + "employee_id VARCHAR(255) NOT NULL, "
+                    + "action VARCHAR(50) NOT NULL, "
+                    + "date VARCHAR(50) NOT NULL, "
+                    + "time VARCHAR(50) NOT NULL, "
                     + "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
                     + ");";
 
@@ -52,7 +82,7 @@ public class DatabaseManager {
     public void insertLog(String employeeId, String action, String date, String time) {
         String insertSQL = "INSERT INTO " + TABLE_NAME + " (employee_id, action, date, time) VALUES (?, ?, ?, ?)";
 
-        try (Connection conn = DriverManager.getConnection(DATABASE_URL);
+        try (Connection conn = getConnection();
              PreparedStatement pstmt = conn.prepareStatement(insertSQL)) {
 
             pstmt.setString(1, employeeId);
@@ -75,7 +105,7 @@ public class DatabaseManager {
         List<AttendanceLog> logs = new ArrayList<>();
         String selectSQL = "SELECT employee_id, action, date, time FROM " + TABLE_NAME + " ORDER BY date DESC, time DESC";
 
-        try (Connection conn = DriverManager.getConnection(DATABASE_URL);
+        try (Connection conn = getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(selectSQL)) {
 
@@ -103,7 +133,7 @@ public class DatabaseManager {
         List<AttendanceLog> logs = new ArrayList<>();
         String selectSQL = "SELECT employee_id, action, date, time FROM " + TABLE_NAME + " WHERE date = ? ORDER BY time DESC";
 
-        try (Connection conn = DriverManager.getConnection(DATABASE_URL);
+        try (Connection conn = getConnection();
              PreparedStatement pstmt = conn.prepareStatement(selectSQL)) {
 
             pstmt.setString(1, targetDate);
@@ -134,7 +164,7 @@ public class DatabaseManager {
         String selectSQL = "SELECT employee_id, action, date, time FROM " + TABLE_NAME
                 + " WHERE employee_id = ? ORDER BY date DESC, time DESC";
 
-        try (Connection conn = DriverManager.getConnection(DATABASE_URL);
+        try (Connection conn = getConnection();
              PreparedStatement pstmt = conn.prepareStatement(selectSQL)) {
 
             pstmt.setString(1, employeeId);
@@ -164,7 +194,7 @@ public class DatabaseManager {
         String selectSQL = "SELECT action FROM " + TABLE_NAME
                 + " WHERE employee_id = ? ORDER BY created_at DESC LIMIT 1";
 
-        try (Connection conn = DriverManager.getConnection(DATABASE_URL);
+        try (Connection conn = getConnection();
              PreparedStatement pstmt = conn.prepareStatement(selectSQL)) {
 
             pstmt.setString(1, employeeId);
@@ -188,7 +218,7 @@ public class DatabaseManager {
         List<String> dates = new ArrayList<>();
         String selectSQL = "SELECT DISTINCT date FROM " + TABLE_NAME + " WHERE date != 'N/A' ORDER BY date DESC";
 
-        try (Connection conn = DriverManager.getConnection(DATABASE_URL);
+        try (Connection conn = getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(selectSQL)) {
 
@@ -210,7 +240,7 @@ public class DatabaseManager {
         List<String> employees = new ArrayList<>();
         String selectSQL = "SELECT DISTINCT employee_id FROM " + TABLE_NAME + " ORDER BY employee_id";
 
-        try (Connection conn = DriverManager.getConnection(DATABASE_URL);
+        try (Connection conn = getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(selectSQL)) {
 
@@ -231,7 +261,7 @@ public class DatabaseManager {
     public boolean employeeExists(String employeeId) {
         String selectSQL = "SELECT COUNT(*) FROM " + TABLE_NAME + " WHERE employee_id = ?";
 
-        try (Connection conn = DriverManager.getConnection(DATABASE_URL);
+        try (Connection conn = getConnection();
              PreparedStatement pstmt = conn.prepareStatement(selectSQL)) {
 
             pstmt.setString(1, employeeId);
@@ -254,7 +284,7 @@ public class DatabaseManager {
     public int getTotalLogCount() {
         String selectSQL = "SELECT COUNT(*) FROM " + TABLE_NAME;
 
-        try (Connection conn = DriverManager.getConnection(DATABASE_URL);
+        try (Connection conn = getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(selectSQL)) {
 
@@ -275,7 +305,7 @@ public class DatabaseManager {
     public void clearAllLogs() {
         String deleteSQL = "DELETE FROM " + TABLE_NAME;
 
-        try (Connection conn = DriverManager.getConnection(DATABASE_URL);
+        try (Connection conn = getConnection();
              Statement stmt = conn.createStatement()) {
 
             stmt.executeUpdate(deleteSQL);

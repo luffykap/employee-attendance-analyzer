@@ -18,17 +18,17 @@ mkdir -p "$LIB_DIR"
 mkdir -p "$WEB_INF_DIR/classes"
 mkdir -p "$WEB_INF_DIR/lib"
 
-# Download SQLite JDBC driver if not present
-JDBC_JAR="$LIB_DIR/sqlite-jdbc-3.41.2.2.jar"
+# Download PostgreSQL JDBC driver if not present
+JDBC_JAR="$LIB_DIR/postgresql-42.7.3.jar"
 if [ ! -f "$JDBC_JAR" ]; then
-    echo "Downloading SQLite JDBC driver..."
-    curl -L -o "$JDBC_JAR" "https://github.com/xerial/sqlite-jdbc/releases/download/3.41.2.2/sqlite-jdbc-3.41.2.2.jar" 2>/dev/null
+    echo "Downloading PostgreSQL JDBC driver..."
+    curl -L -o "$JDBC_JAR" "https://jdbc.postgresql.org/download/postgresql-42.7.3.jar" 2>/dev/null
     if [ $? -eq 0 ]; then
-        echo "✅ SQLite JDBC driver downloaded successfully!"
+        echo "✅ PostgreSQL JDBC driver downloaded successfully!"
     else
         echo "⚠️  Could not download JDBC driver automatically. Attempting offline..."
         # Create a placeholder that will be handled by Maven or manual download
-        echo "Please download sqlite-jdbc JAR and place it in $LIB_DIR"
+        echo "Please download postgresql-jdbc JAR and place it in $LIB_DIR"
     fi
 fi
 
